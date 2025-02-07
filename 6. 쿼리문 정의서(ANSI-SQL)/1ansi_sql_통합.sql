@@ -86,8 +86,9 @@ SELECT
     c.courseName AS 과정명,
     s.subjectName AS 과목명,
     t.testType AS 시험종류,
-    t.testContext AS 시험문제,
-    t.testDate AS 날짜
+     t.testDate AS 날짜,
+     t.testContext AS 시험문제
+   
 FROM process p
     inner join Course c ON p.courseSeq = c.courseSeq
     inner join prcSubject ps ON p.processSeq = ps.processSeq
