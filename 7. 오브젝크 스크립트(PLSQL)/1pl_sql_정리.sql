@@ -454,33 +454,34 @@ begin
 end;
 /
 
-
+select * from clsRoom;
 --3.강의실명 관리
 /*추가*/
 insert into clsRoom(clsRoomSeq,clsRoomName,clsRoomPpl) values (clsRoom_seq.NEXTVAL, q'[제 1 강의실]','30');
 
 --/*추가*/ClsRoomInsert
+--/추가/ClsRoomInsert
 create or replace procedure ClsRoomInsert( 
-    p_clsRoomName subject.clsRoomName%type,
-    p_clsRoomPpl subject.clsRoomPpl%type
+    p_clsRoomName clsroom.clsRoomName%type,
+    p_clsRoomPpl clsroom.clsRoomPpl%type
 )
 is
     v_clsRoomSeq NUMBER;
-BEGIN  
+BEGIN
     -- 과목 정보 삽입
     v_clsRoomSeq := clsRoom_seq.NEXTVAL;
-    INSERT INTO clsRoom (clsRoomSeq,clsRoomName,clsRoomPpl)   
-    VALUES (v_subjectSeq,p_clsRoomName,p_clsRoomPpl);    
-     
-    DBMS_OUTPUT.PUT_LINE('추가된 강의실 번호: ' || v_subjectSeq);  
-    DBMS_OUTPUT.PUT_LINE('추가된 강의실 이름: ' || p_clsRoomName);  
-    DBMS_OUTPUT.PUT_LINE('추가된 강의실 수용인원: ' || p_clsRoomPpl);
-    
-EXCEPTION  
-    WHEN OTHERS THEN  
-        ROLLBACK; -- 오류 발생시 롤백  
+    INSERT INTO clsRoom (clsRoomSeq,clsRoomName,clsRoomPpl)
+    VALUES (v_clsRoomSeq,p_clsRoomName,p_clsRoomPpl);
+
+    DBMS_OUTPUT.PUT_LINE('추가된 강의실 번호: ' || v_clsRoomSeq);
+    DBMS_OUTPUT.PUT_LINE('추가된 강의실 이름: ' || p_clsRoomName);
+    DBMS_OUTPUT.PUT_LINE('추가된 강의실 수용인원: '||  p_clsRoomPpl);
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK; -- 오류 발생시 롤백
         DBMS_OUTPUT.PUT_LINE('오류 발생: ' || SQLERRM); 
-END;  
+END;
 /
 --ClsRoomInsert(강의실명,강의실수용인원)
 Begin
@@ -2534,22 +2535,23 @@ BEGIN
 END;
 /
 
-
+set serveroutput on;
 -- c2_4 특정 강사의 진행중인 강의 듣는 학생명단 조회(수료 또는 중도탈락)
-CREATE OR REPLACE PROCEDURE getActiveStudents (
+CREATE OR REPLACE PROCEDURE getCourseStudents (
     pTeacherSeq IN NUMBER,  -- 강사번호
     pProcessSeq IN NUMBER   -- 과정번호
 )
 IS
 BEGIN
-    -- 특정 강사가 진행 중인 강의를 듣는 학생 목록 조회
+    -- 특정 강사의 특정 과정 수강 학생 목록 조회
     FOR rec IN (
         SELECT 
+            distinct
             s.studentSeq AS 학생번호,
             s.studentName AS 학생명,
             s.studentTel AS 전화번호,
             TO_CHAR(s.studentDate, 'YYYY-MM-DD') AS 등록일,
-            st.status AS 학생상태
+            NVL(st.status, '수강중') AS 학생상태
         FROM prcSubject ps 
         INNER JOIN scoreAllot sa ON ps.prcSubjectSeq = sa.prcSubjectSeq
         INNER JOIN teacher t ON t.teacherSeq = sa.teacherSeq
@@ -2557,10 +2559,8 @@ BEGIN
         INNER JOIN process p ON p.processSeq = ps.processSeq
         INNER JOIN studentCls sc ON sc.processSeq = p.processSeq
         INNER JOIN student s ON s.studentSeq = sc.studentSeq
-        INNER JOIN stStatus st ON st.studentSeq = s.studentSeq
-        WHERE ps.prcSubjectEDate > SYSDATE 
-          AND ps.prcSubjectSDate <= SYSDATE 
-          AND t.teacherSeq = pTeacherSeq
+        LEFT OUTER JOIN stStatus st ON st.studentSeq = s.studentSeq
+        WHERE t.teacherSeq = pTeacherSeq
           AND p.processSeq = pProcessSeq
     ) LOOP
         DBMS_OUTPUT.PUT_LINE('학생번호: ' || rec.학생번호);
@@ -2578,15 +2578,14 @@ EXCEPTION
     -- 기타 오류 처리
     WHEN OTHERS THEN
         DBMS_OUTPUT.PUT_LINE('오류 발생: ' || SQLERRM);
-END getActiveStudents;
+END getCourseStudents;
 /
+
 
 BEGIN
-    getActiveStudents(1, 1); -- 강사번호 1번, 과정번호 1번 강의 듣는 학생 조회
+    getCourseStudents(6, 1); -- 강사번호 6번, 과정번호 1번 강의 듣는 학생 조회
 END;
 /
-
-
 
 
 /*
@@ -4054,19 +4053,17 @@ END;
 
 --==========================================================
 /*  공휴일(추가,조회,수정,삭제)  */
---==========================================================
-
 /*추가*/
 
 CREATE OR REPLACE PROCEDURE pInsertHoliday (
     pyear in number,
     pmonth in number,
-    pday in number
+    pday in number,
+    pHolidayName IN VARCHAR2
 )
 is
     vcount NUMBER;
     vholiday_date date;
-    vholiday_name varchar(50);
 BEGIN
 
     vholiday_date := TO_DATE(pyear || '-' || pmonth || '-' || pday, 'YYYY-MM-DD');
@@ -4075,25 +4072,25 @@ BEGIN
     FROM holiday 
     WHERE holidaydate = vholiday_date; 
     
-    select holidayname into vholiday_name
-    from holiday
-    where holidaydate = vholiday_date;
 
     -- 날짜가 존재하면 예외 처리
     IF vcount > 0 THEN
-        DBMS_OUTPUT.PUT_LINE(TO_CHAR(vholiday_date, 'YYYY-MM-DD') ||' : 이날은 '|| vholiday_name||'입니다! 날짜를 올바르게 입력해주세요.');
+        DBMS_OUTPUT.PUT_LINE(TO_CHAR(vholiday_date, 'YYYY-MM-DD') ||' : 이날은 이미 등록된 휴일입니다! 날짜를 올바르게 입력해주세요.');
     ELSE
-        INSERT INTO holiday VALUES (holiday_seq.NEXTVAL, TO_DATE('2024-07-15', 'YYYY-MM-DD'), '학원휴일');
-        DBMS_OUTPUT.PUT_LINE(TO_CHAR(vholiday_date, 'YYYY-MM-DD') ||' : 휴일이 정상적으로 추가되었습니다.');
+        INSERT INTO holiday VALUES (holiday_seq.NEXTVAL, vholiday_date, pHolidayName);
+        COMMIT;
+        DBMS_OUTPUT.PUT_LINE(TO_CHAR(vholiday_date, 'YYYY-MM-DD') || ' : 휴일(' || pHolidayName || ')이 정상적으로 추가되었습니다.');
     END IF;
 END pInsertHoliday;
 /
 
 -- 호출하기 매개변수 : 년,월,일
 begin
-    pInsertHoliday(2024,8,15);
+    pInsertHoliday(2024,4,15,'쉬는날~');
 end;
 /
+
+select holidaydate as 날짜, holidayname as 휴일명 from holiday order by holidaydate;
 
 
 
@@ -4131,7 +4128,7 @@ END pUpdateHoliday;
 
 -- 호출하기 매개변수 : 년,월,일,공휴일명
 begin
-    pUpdateHoliday(2024,7,15,'학원 쉬는날');
+    pUpdateHoliday(2024,4,15,'학원 쉬는날');
 end;
 /
 
@@ -4170,7 +4167,7 @@ END pDeleteHoliday;
 
 -- 호출하기 매개변수 : 년,월,일
 begin
-    pDeleteHoliday(2024,7,14);
+    pDeleteHoliday(2024,4,15);
 end;
 /
 
@@ -4252,10 +4249,12 @@ end;
 --==========================================================
 /*  회사 정보 view  */
 --==========================================================
---view
+/*  회사 정보 view  */
+
 create or replace view vCompanyInfo
 as
 select 
+    s.studentname as "학생명",
     e.enterName as "회사명" , 
     e.enterBuseo as "업무내용", 
     t.techName as "사용하는 주요 기술"
@@ -4266,11 +4265,9 @@ inner join team te on te.teamSeq = p.teamSeq
 inner join student s on s.studentSeq = te.studentSeq
 inner join studentCrtf sc on sc.studentSeq = s.studentSeq
 inner join crtf c on c.crtfSeq = sc.crtfSeq
-where s.studentname = '홍성준';
-
-SELECT * FROM vCompanyInfo;
 
 
+SELECT * FROM vCompanyInfo where 학생명 = '홍성준';
 
 
 /*
